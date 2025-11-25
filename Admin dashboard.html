@@ -1,0 +1,225 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>VH Village Hustle - Admin Dashboard</title>
+<style>
+body{margin:0;font-family:Arial;background:#f4f4f4;color:#222}
+header{background:#111;color:#fff;padding:18px;text-align:center;font-size:28px;font-weight:bold}
+.container{max-width:1000px;margin:30px auto;padding:20px}
+.card{background:#fff;padding:20px;border-radius:12px;margin-bottom:20px;box-shadow:0 4px 10px rgba(0,0,0,.1)}
+.card h2{margin-top:0}
+ul{list-style:none;padding:0}
+li{background:#eee;margin:8px 0;padding:12px;border-radius:8px;display:flex;justify-content:space-between;align-items:center}
+button{padding:8px 14px;border:none;border-radius:8px;cursor:pointer;color:#fff;background:#111}
+button:hover{opacity:.9}
+input{padding:10px;width:100%;border-radius:8px;border:1px solid #aaa;margin:6px 0}
+#productListAdmin div{margin:6px 0;padding:10px;background:#fafafa;border-radius:8px;border:1px solid #ddd}
+.action-btns button{margin-left:8px}
+</style>
+</head>
+<body>
+
+<!-- Admin Login Overlay -->
+<div id="loginOverlay" style="position:fixed;top:0;left:0;width:100%;height:100%;background:#000000d0;display:flex;align-items:center;justify-content:center;z-index:5000;">
+  <div style="background:#fff;padding:25px;border-radius:12px;width:300px;text-align:center;box-shadow:0 4px 10px rgba(0,0,0,.2)">
+    <h2>Admin Login</h2>
+    <input id="adminPass" type="password" placeholder="Enter Password" style="width:100%;padding:10px;margin-top:10px;border-radius:8px;border:1px solid #ccc;">
+    <button onclick="checkLogin()" style="width:100%;margin-top:12px;padding:10px;border:none;border-radius:8px;background:#111;color:#fff;cursor:pointer;">Login</button>
+  </div>
+</div>
+<header>Admin Dashboard</header>
+<div class="container">
+
+<div class="card">
+<h2>Add New Product</h2>
+<input id="pName" placeholder="Product Name">
+<input id="pPrice" placeholder="Price (R)" type="number">
+<input id="pImage" placeholder="Image URL">
+<input id="pCategory" placeholder="Category (kids, adult, accessory)">
+<input id="pStock" placeholder="Stock Quantity" type="number">
+<button onclick="addProduct()">Add Product</button>
+</div>
+
+<div class="card">
+<h2>Existing Products</h2>
+<div id="productListAdmin"></div>
+</div>
+
+<div class="card">
+<h2>Orders</h2>
+<div id="ordersList"></div>
+
+<!-- OTP Box -->
+<div id="otpBox" style="display:none;margin-top:20px;text-align:center;">
+  <h3>OTP Verification</h3>
+  <p>Your account is locked. Request a one-time code.</p>
+  <button onclick="sendOTP()" style="padding:10px 15px;border:none;background:#111;color:white;border-radius:8px;cursor:pointer;">Send OTP</button>
+  <input id="otpInput" placeholder="Enter OTP" style="width:80%;margin-top:10px;padding:10px;border-radius:8px;border:1px solid #ccc;">
+  <button onclick="verifyOTP()" style="padding:10px 15px;border:none;background:#0a7;color:white;border-radius:8px;cursor:pointer;margin-top:10px;">Verify</button>
+</div>
+</div>
+</div>
+
+<script>
+
+/**************** Enhanced Secure Login ****************/
+// Store hashed password (simple SHA-256 hash)
+const ADMIN_HASH = "eaaf01c6aa9d4fc8e1fa...placeholderhash..."; // Replace with real hash
+
+// Hashing function (browser SHA-256)
+async function sha256(message) {
+  const msgBuffer = new TextEncoder().encode(message);
+  const hashBuffer = await crypto.subtle.digest("SHA-256", msgBuffer);
+  const hashArray = Array.from(new Uint8Array(hashBuffer));
+  return hashArray.map(b => b.toString(16).padStart(2, "0")).join("");
+}
+
+let loginAttempts = 0;
+const MAX_ATTEMPTS = 5;
+let otpCode = null;
+
+async function checkLogin(){
+  const entered = document.getElementById('adminPass').value;
+  const hashed = await sha256(entered);
+
+  if(loginAttempts >= MAX_ATTEMPTS){
+    alert("Too many attempts. Please request OTP.");
+    return showOTPRequest();
+  }
+
+  if(hashed === ADMIN_HASH){
+    loginSuccess();
+  } else {
+    loginAttempts++;
+    alert('Incorrect password. Attempts: '+loginAttempts);
+    if(loginAttempts >= MAX_ATTEMPTS){ showOTPRequest(); }
+  }
+}
+
+function loginSuccess(){
+  document.getElementById('loginOverlay').style.display = 'none';
+}
+
+function showOTPRequest(){
+  document.getElementById('otpBox').style.display = 'block';
+}
+
+function sendOTP(){
+  otpCode = Math.floor(100000 + Math.random()*900000);
+  alert("OTP sent to admin WhatsApp (simulated): " + otpCode);
+}
+
+function verifyOTP(){
+  const val = document.getElementById('otpInput').value;
+  if(val == otpCode){ loginSuccess(); }
+  else alert("Incorrect OTP");
+}
+
+/********************************************************/
+// Load from storage
+function loadProducts(){ return JSON.parse(localStorage.getItem('vh_products')||'[]'); }
+function saveProducts(arr){ localStorage.setItem('vh_products', JSON.stringify(arr)); }
+function loadOrders(){ return JSON.parse(localStorage.getItem('vh_orders')||'[]'); }
+function saveOrders(arr){ localStorage.setItem('vh_orders', JSON.stringify(arr)); }
+
+function renderProducts(){
+ let list=document.getElementById('productListAdmin');
+ let products=loadProducts();
+ list.innerHTML='';
+ products.forEach((p,i)=>{
+   list.innerHTML+=`
+   <div>
+     <strong>${p.name}</strong> - R${p.price} - Stock: ${p.stock}<br>
+     <small>Category: ${p.category}</small>
+     <div class="action-btns">
+       <button onclick="editProduct(${i})">Edit</button>
+       <button style='background:red' onclick="deleteProduct(${i})">Delete</button>
+     </div>
+   </div>`;
+ });
+}
+
+function addProduct(){
+ let name=document.getElementById('pName').value;
+ let price=document.getElementById('pPrice').value;
+ let img=document.getElementById('pImage').value;
+ let cat=document.getElementById('pCategory').value;
+ let stock=document.getElementById('pStock').value;
+ if(!name||!price) return alert('Name and price required');
+ let products=loadProducts();
+ products.push({ id:'p_'+Date.now(), name, price:Number(price), images:[img], category:cat||'other', stock:Number(stock)||0 });
+ saveProducts(products); renderProducts();
+ document.getElementById('pName').value='';
+ document.getElementById('pPrice').value='';
+ document.getElementById('pImage').value='';
+ document.getElementById('pCategory').value='';
+ document.getElementById('pStock').value='';
+}
+
+function editProduct(i){
+ let products=loadProducts();
+ let p=products[i];
+ let name=prompt('Name', p.name);
+ let price=prompt('Price', p.price);
+ let img=prompt('Image URL', p.images.join(','));
+ let cat=prompt('Category', p.category);
+ let stock=prompt('Stock', p.stock);
+ if(name!==null) p.name=name;
+ if(price!==null) p.price=Number(price);
+ if(img!==null) p.images=img.split(',');
+ if(cat!==null) p.category=cat;
+ if(stock!==null) p.stock=Number(stock);
+ saveProducts(products); renderProducts();
+}
+
+function deleteProduct(i){
+ if(!confirm('Delete product?')) return;
+ let products=loadProducts();
+ products.splice(i,1);
+ saveProducts(products); renderProducts();
+}
+
+function renderOrders(){
+ let orders=loadOrders();
+ let box=document.getElementById('ordersList');
+ box.innerHTML='';
+ if(!orders.length) return box.innerHTML='No orders yet';
+ orders.forEach(o=>{
+   box.innerHTML+=`
+   <div style='background:#fafafa;padding:12px;margin:8px 0;border-radius:8px;'>
+     <strong>Order ID:</strong> ${o.id}<br>
+     <strong>Items:</strong> ${o.items.map(i=>`${i.qty} x ${i.name}`).join(', ')}<br>
+     <strong>Total:</strong> R${o.total}<br>
+     <strong>Status:</strong> ${o.status}<br>
+     <button onclick="updateOrder('${o.id}','confirmed')">Confirm</button>
+     <button onclick="updateOrder('${o.id}','delivered')">Delivered</button>
+   </div>`;
+ });
+}
+
+function updateOrder(id,status){
+ let orders=loadOrders();
+ let o=orders.find(x=>x.id===id);
+ if(o){ o.status=status; saveOrders(orders); renderOrders(); }
+}
+
+renderProducts();
+renderOrders();
+</script>
+<script>
+// === Admin Login Script ===
+const ADMIN_PASSWORD = "vhadmin"; // change as needed
+
+function checkLogin(){
+  const entered = document.getElementById('adminPass').value;
+  if(entered === ADMIN_PASSWORD){
+    document.getElementById('loginOverlay').style.display = 'none';
+  } else {
+    alert('Incorrect password');
+  }
+}
+</script>
+</body>
+</html>
